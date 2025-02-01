@@ -20,8 +20,20 @@ class PixelCanvas(QW.QWidget):
         }
 
         self.current_layer = "foreground"  # 初期レイヤーは前景
+        self.layer_visibility = {"background": True, "foreground": True}
 
         self.setFixedSize(grid_size * pixel_size, grid_size * pixel_size)
+
+    def update_canvas_size(self):
+        """キャンバスのサイズを更新"""
+        self.setFixedSize(self.grid_size * self.pixel_size, self.grid_size * self.pixel_size)
+        self.update()
+
+    def resize_canvas(self, new_size):
+        """キャンバスサイズを変更"""
+        self.grid_size = new_size
+        self.pixels.clear()  # サイズ変更時にリセット
+        self.update_canvas_size()
 
     def save_canvas(self):
         """キャンバスの内容を画像として保存（グリッドなし）"""
@@ -58,8 +70,9 @@ class PixelCanvas(QW.QWidget):
             painter.fillRect(*rect, color)
 
         for layer in ["background", "foreground"]:
-          for (x, y), color in self.layers[layer].items():
-            painter.fillRect(x, y, self.pixel_size, self.pixel_size, color)
+          if self.layer_visibility.get(layer, True):  # 表示されているレイヤーのみ描画
+            for (x, y), color in self.layers[layer].items():
+                painter.fillRect(x, y, self.pixel_size, self.pixel_size, color)
 
         # グリッド描画（ON の場合のみ）
         if self.show_grid:
@@ -93,12 +106,12 @@ class PixelCanvas(QW.QWidget):
             if self.current_color is not None:
                 self.layers[self.current_layer][(x, y)] = self.current_color
             else:
-                if (x, y) in self.pixels:
-                    del self.pixels[(x, y)]  # 消しゴム機能
+                if (x, y) in self.layers[self.current_layer]:
+                    del self.layers[self.current_layer][(x, y)]  # 消しゴム機能
 
         elif event.button() == QC.Qt.RightButton:
-            if (x, y) in self.pixels:
-                self.set_color(self.pixels[(x, y)])
+            if (x, y) in self.layers[self.current_layer]:
+                self.set_color(self.layers[self.current_layer][(x, y)])
 
         self.update()
 
@@ -129,3 +142,43 @@ class PixelCanvas(QW.QWidget):
       """描画するレイヤーを変更"""
       if layer in self.layers:
         self.current_layer = layer
+
+    def add_layer(self, layer_name):
+      """新しいレイヤーを追加"""
+      if layer_name not in self.layers:
+        self.layers[layer_name] = {}
+
+    def delete_layer(self, layer_name):
+      """レイヤーを削除"""
+      if layer_name in self.layers and len(self.layers) > 1:
+        del self.layers[layer_name]
+
+    def move_layer_to_front(self, layer_name):
+      """指定したレイヤーを前面に移動"""
+      if layer_name in self.layers:
+        layer = self.layers.pop(layer_name)
+        self.layers = {layer_name: layer, **self.layers}
+
+    def move_layer_to_back(self, layer_name):
+      """指定したレイヤーを背面に移動"""
+      if layer_name in self.layers:
+        layer = self.layers.pop(layer_name)
+        self.layers[layer_name] = layer
+
+    def set_layer_opacity(self, layer_name, opacity):
+      """指定したレイヤーの透明度を設定"""
+      if layer_name in self.layers:
+        for key, color in self.layers[layer_name].items():
+            new_color = color.withAlphaF(opacity)
+            self.layers[layer_name][key] = new_color
+
+    def toggle_layer_visibility(self, layer_name):
+      """レイヤーの表示/非表示を切り替え"""
+      if layer_name in self.layer_visibility:
+        self.layer_visibility[layer_name] = not self.layer_visibility[layer_name]
+        self.update()  # 再描画して反映
+
+    def rename_layer(self, old_name, new_name):
+      """レイヤー名を変更"""
+      if old_name in self.layers and new_name not in self.layers:
+        self.layers[new_name] = self.layers.pop(old_name)
