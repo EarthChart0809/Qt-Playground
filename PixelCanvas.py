@@ -21,8 +21,13 @@ class PixelCanvas(QW.QWidget):
 
         self.current_layer = "foreground"  # 初期レイヤーは前景
         self.layer_visibility = {"background": True, "foreground": True}
+        self.brush_mode = "normal"  # ブラシモード（normal, checker, symmetry）
 
         self.setFixedSize(grid_size * pixel_size, grid_size * pixel_size)
+
+    def set_brush_mode(self, mode):
+      self.brush_mode = mode
+      print(f"Brush mode set to: {self.brush_mode}")  # デバッグ用
 
     def update_canvas_size(self):
         """キャンバスのサイズを更新"""
@@ -102,7 +107,13 @@ class PixelCanvas(QW.QWidget):
         y = (event.pos().y() // self.pixel_size) * self.pixel_size
 
         if event.button() == QC.Qt.LeftButton:
-            self.save_state()  # 変更前の状態を保存
+          self.save_state()  # 変更前の状態を保存
+
+          if self.brush_mode == "checker":  # 市松模様モード
+            self.draw_checker_pattern(x, y)
+          elif self.brush_mode == "symmetry":  # 左右対称モード
+            self.draw_symmetric(x, y)
+          else:
             if self.current_color is not None:
                 self.layers[self.current_layer][(x, y)] = self.current_color
             else:
@@ -121,21 +132,22 @@ class PixelCanvas(QW.QWidget):
 
     def save_state(self):
         """現在のピクセルの状態を履歴に保存"""
-        self.history.append(self.pixels.copy())
+        self.history.append(self.layers[self.current_layer].copy())
         self.future.clear()  # 新しい操作をしたらリドゥ履歴をクリア
 
     def undo(self):
         """アンドゥ（元に戻す）"""
         if self.history:
-            self.future.append(self.pixels.copy())  # 現在の状態をリドゥ用に保存
-            self.pixels = self.history.pop()  # 直前の状態を復元
+            self.future.append(
+                self.layers[self.current_layer].copy())  # 現在の状態をリドゥ用に保存
+            self.layers[self.current_layer] = self.history.pop()  # 直前の状態を復元
             self.update()
 
     def redo(self):
         """リドゥ（やり直す）"""
         if self.future:
-            self.history.append(self.pixels.copy())  # 現在の状態をアンドゥ用に保存
-            self.pixels = self.future.pop()  # 直後の状態を復元
+            self.history.append(self.layers[self.current_layer].copy())  # 現在の状態をアンドゥ用に保存
+            self.layers[self.current_layer] = self.future.pop()  # 直後の状態を復元
             self.update()
 
     def set_layer(self, layer):
@@ -182,3 +194,27 @@ class PixelCanvas(QW.QWidget):
       """レイヤー名を変更"""
       if old_name in self.layers and new_name not in self.layers:
         self.layers[new_name] = self.layers.pop(old_name)
+
+    def draw_checker_pattern(self, x, y):
+        """市松模様を描画"""
+        for i in range(2):
+            for j in range(2):
+                grid_x = x + i * self.pixel_size
+                grid_y = y + j * self.pixel_size
+                if (i + j) % 2 == 0:  # 市松模様の条件
+                    self.layers[self.current_layer][(
+                        grid_x, grid_y)] = self.current_color
+        self.update()
+
+    def draw_symmetric(self, x, y):
+        """左右対称にドットを描画"""
+        width = self.width()
+        height = self.height()
+        mirrored_x = width - x - self.pixel_size  # 左右反転
+        mirrored_y = height - y - self.pixel_size  # 上下反転
+        self.layers[self.current_layer][(x, y)] = self.current_color
+        self.layers[self.current_layer][(mirrored_x, y)] = self.current_color
+        self.layers[self.current_layer][(x, mirrored_y)] = self.current_color
+        self.layers[self.current_layer][(
+            mirrored_x, mirrored_y)] = self.current_color
+        self.update()

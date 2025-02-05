@@ -7,6 +7,7 @@ class DotEditor(QW.QWidget):
     def __init__(self):
         super().__init__()
         self.canvas = PixelCanvas()
+        self.brush_mode = None  # ブラシモード（normal, checker, symmetry）
 
         # 色のパレットを保持するリスト
         self.color_palette = [
@@ -32,6 +33,13 @@ class DotEditor(QW.QWidget):
                 lambda checked, c=color: self.canvas.set_color(c))
             self.palette_buttons.append(btn)
             tool_layout.addWidget(btn)
+
+        # ショートカットキーの設定
+        undo_shortcut = QG.QShortcut(QG.QKeySequence("Ctrl+Z"), self)
+        undo_shortcut.activated.connect(self.canvas.undo)
+
+        redo_shortcut = QG.QShortcut(QG.QKeySequence("Ctrl+Y"), self)
+        redo_shortcut.activated.connect(self.canvas.redo)
 
         # 色を追加するボタン
         self.add_color_button = QW.QPushButton("色を追加")
@@ -65,14 +73,22 @@ class DotEditor(QW.QWidget):
         self.resize_button.clicked.connect(self.change_canvas_size)
 
         #グリッドON / OFFボタン
-        self.grid_button = QW.QPushButton("グリッド ON/OFF")
+        self.grid_button = QW.QCheckBox("グリッド ON/OFF")
         self.grid_button.clicked.connect(self.canvas.toggle_grid)
+
+        self.checker_brush_button = QW.QPushButton("市松模様")
+        self.checker_brush_button.clicked.connect(lambda: self.set_brush_mode("checker"))
+
+        self.symmetry_brush_button = QW.QPushButton("シンメトリー")
+        self.symmetry_brush_button.clicked.connect(lambda: self.set_brush_mode("symmetry"))
 
         # ツールのレイアウトに追加
         tool_layout.addWidget(QW.QLabel("キャンバスサイズ:"))
         tool_layout.addWidget(self.size_input)
         tool_layout.addWidget(self.resize_button)
         tool_layout.addWidget(self.grid_button)
+        tool_layout.addWidget(self.checker_brush_button)
+        tool_layout.addWidget(self.symmetry_brush_button)
 
 
         # ===== 右側（レイヤー操作） =====
@@ -193,3 +209,7 @@ class DotEditor(QW.QWidget):
         """キャンバスのサイズを変更する"""
         new_size = self.size_input.value()
         self.canvas.resize_canvas(new_size)
+
+    def set_brush_mode(self, mode):
+      self.brush_mode = mode
+      print(f"Brush mode set to: {self.brush_mode}")  # デバッグ用
