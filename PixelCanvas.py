@@ -1,6 +1,9 @@
 import PySide6.QtWidgets as QW
 import PySide6.QtGui as QG
 import PySide6.QtCore as QC
+from CropSelection import CropSelectionView
+import cv2
+import numpy as np
 
 class PixelCanvas(QW.QWidget):
     def __init__(self, grid_size=16, pixel_size=20):
@@ -96,6 +99,12 @@ class PixelCanvas(QW.QWidget):
             painter.drawLine(0, center_y, self.width(), center_y)
             painter.drawLine(center_x - 1, 0, center_x - 1, self.height())
             painter.drawLine(0, center_y - 1, self.width(), center_y - 1)
+
+    def clear_canvas(self):
+        """キャンバスをクリア"""
+        self.pixels.clear()
+        self.layers = {"background": {}, "foreground": {}}
+        self.update
 
     def toggle_grid(self):
         """グリッドの ON/OFF を切り替える"""
@@ -218,3 +227,100 @@ class PixelCanvas(QW.QWidget):
         self.layers[self.current_layer][(
             mirrored_x, mirrored_y)] = self.current_color
         self.update()
+
+    def get_crop_rect(self, pixmap):
+      dialog = QW.QDialog(self)
+      dialog.setWindowTitle("切り取り範囲を選択")
+      layout = QW.QVBoxLayout(dialog)
+
+      scene = QW.QGraphicsScene()
+      pixmap_item = QW.QGraphicsPixmapItem(pixmap)
+      scene.addItem(pixmap_item)
+
+      view = CropSelectionView(scene)  # カスタムビューを使用
+      layout.addWidget(view)
+
+      select_button = QW.QPushButton("選択完了")
+      layout.addWidget(select_button)
+
+      def on_select():
+        if view.selection_rect:
+            rect = view.selection_rect.rect().toRect()
+            dialog.accept()
+            return rect
+        return None
+
+      select_button.clicked.connect(on_select)
+      if dialog.exec() == QW.QDialog.Accepted:
+        return on_select()
+      return None
+
+    def load_and_crop_image(self, file_path):
+      """ 画像を読み込み、切り取り、キャンバスに適用 """
+      original_pixmap = QG.QPixmap(file_path)
+      if original_pixmap.isNull():
+        return  # 画像が無効なら何もしない
+
+      # トリミングウィンドウを開く
+      rect = self.get_crop_rect(original_pixmap)
+      if rect is None:
+        return  # 選択なし
+
+      cropped_pixmap = original_pixmap.copy(rect)
+
+      # キャンバスのピクセルグリッドサイズに合わせてリサイズ
+      scaled_pixmap = cropped_pixmap.scaled(
+                      self.width() * self.pixel_size,
+                      self.height() * self.pixel_size,
+          QC.Qt.IgnoreAspectRatio,
+          QC.Qt.SmoothTransformation)
+
+      # QPixmap → QImage に変換してドット絵化
+      self.apply_to_canvas(scaled_pixmap.toImage(), num_colors=64) #256まで調整可能
+
+    def apply_to_canvas(self, image, num_colors=16):
+      """ ピクセルデータをキャンバスに適用（リサイズ＆減色処理） """
+
+      # 画像をキャンバスのピクセルグリッドサイズにリサイズ
+      image = image.scaled(self.width(), self.height(),
+                        QC.Qt.IgnoreAspectRatio, QC.Qt.SmoothTransformation)
+
+      width, height = image.width(), image.height()
+      ptr = image.bits()
+      data = np.frombuffer(ptr, dtype=np.uint8).copy().reshape(
+        (height, width, 4))  # RGBA
+
+      # アルファチャンネルを無視して RGB のみにする
+      data = data[:, :, :3]  # (height, width, 3) の形にする
+
+      # RGB → Lab 色空間に変換
+      lab_image = cv2.cvtColor(data, cv2.COLOR_RGB2Lab)
+
+      # K-means クラスタリング
+      Z = np.float32(lab_image.reshape((-1, 3)))  # 1次元化
+      _, labels, centers = cv2.kmeans(Z, num_colors, None,
+                                    (cv2.TERM_CRITERIA_EPS +
+                                    cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0),
+                                    10, cv2.KMEANS_RANDOM_CENTERS)
+
+      # 量子化した結果を元の形に戻す
+      centers = np.uint8(centers)
+      quantized_lab = centers[labels.flatten()].reshape(data.shape)
+
+      # Lab → RGB に戻す
+      quantized = cv2.cvtColor(quantized_lab, cv2.COLOR_Lab2RGB)
+
+      # ピクセルグリッドに合わせてキャンバスデータに適用
+      pixel_size = self.pixel_size
+      for y in range(height):
+        for x in range(width):
+            grid_x = (x // pixel_size) * pixel_size
+            grid_y = (y // pixel_size) * pixel_size
+            color = tuple(map(int, quantized[y, x]))  # RGB値を整数タプル化
+
+            # PySide6 QColor へ変換
+            qcolor = QG.QColor(*color)
+            self.layers[self.current_layer][(
+                grid_x, grid_y)] = qcolor  # ピクセル情報を適用
+
+      self.update()  # キャンバスを更新

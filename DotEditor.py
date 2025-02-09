@@ -34,6 +34,11 @@ class DotEditor(QW.QWidget):
             self.palette_buttons.append(btn)
             tool_layout.addWidget(btn)
 
+        # 画像読み込みボタン
+        self.load_image_button = QW.QPushButton("画像を読み込む")
+        self.load_image_button.clicked.connect(self.load_image)
+        tool_layout.addWidget(self.load_image_button)
+
         # ショートカットキーの設定
         undo_shortcut = QG.QShortcut(QG.QKeySequence("Ctrl+Z"), self)
         undo_shortcut.activated.connect(self.canvas.undo)
@@ -135,6 +140,13 @@ class DotEditor(QW.QWidget):
 
         self.setLayout(main_layout)
 
+    def load_image(self):
+        """ 画像を読み込み、PixelCanvas に渡す """
+        file_name, _ = QW.QFileDialog.getOpenFileName(
+            self, "画像を選択", "", "Images (*.png *.jpg *.bmp)")
+        if file_name:
+            self.canvas.load_and_crop_image(file_name)
+
     def add_color(self):
         """新しい色を追加する"""
         color = QW.QColorDialog.getColor()
@@ -168,7 +180,8 @@ class DotEditor(QW.QWidget):
 
     def clear_canvas(self):
         """キャンバスをクリアする"""
-        self.canvas.pixels.clear()
+        for layer in self.canvas.layers.values():
+            layer.clear()
         self.canvas.update()
 
     def toggle_layer(self):
