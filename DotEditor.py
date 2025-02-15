@@ -146,6 +146,22 @@ class DotEditor(QW.QWidget):
         # 初期レイヤーリストを更新
         self.layer_list_widget.update_layer_list(self.layers.keys())
 
+        # ウィンドウ全体の背景色
+        self.setStyleSheet("background-color: #F0F0F0;")  # 淡いグレー
+
+        # キャンバスを白に
+        self.canvas.setStyleSheet(
+            "background-color: white; border: 1px solid gray;")
+
+        # レイヤーリストの背景色を変更
+        self.layer_list_widget.setStyleSheet(
+            "background-color: #E0E0E0; border-radius: 5px;")
+
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle("DotEditor")
+
 
     def load_image(self):
         """ 画像を読み込み、PixelCanvas に渡す """
