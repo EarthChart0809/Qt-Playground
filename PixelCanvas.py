@@ -71,16 +71,18 @@ class PixelCanvas(QW.QWidget):
 
     def paintEvent(self, event):
         painter = QG.QPainter(self)
+        print(f"描画開始: {self.layers.keys()}")  # デバッグ用
 
         # ピクセルを描画
         for (x, y), color in self.pixels.items():
             rect = (x, y, self.pixel_size, self.pixel_size)
             painter.fillRect(*rect, color)
 
-        for layer in ["background", "foreground"]:
-          if self.layer_visibility.get(layer, True):  # 表示されているレイヤーのみ描画
-            for (x, y), color in self.layers[layer].items():
-                painter.fillRect(x, y, self.pixel_size, self.pixel_size, color)
+        # すべてのレイヤーを描画
+        for layer_name, layer_data in self.layers.items():
+            if self.layer_visibility.get(layer_name, True):  # 表示されているレイヤーのみ描画
+                for (x, y), color in layer_data.items():
+                    painter.fillRect(x, y, self.pixel_size, self.pixel_size, color)
 
         # グリッド描画（ON の場合のみ）
         if self.show_grid:
@@ -89,6 +91,13 @@ class PixelCanvas(QW.QWidget):
                 for y in range(0, self.height(), self.pixel_size):
                     rect = (x, y, self.pixel_size, self.pixel_size)
                     painter.drawRect(*rect)
+
+        # デバッグ: レイヤーごとにポイント描画
+        for layer_name, layer_data in self.layers.items():
+            print(f"描画中のレイヤー: {layer_name}")  # デバッグ用
+            for pos, color in layer_data.items():
+                painter.setPen(color)
+                painter.drawPoint(*pos)
 
         # 中心線
         if self.show_grid:
@@ -99,6 +108,7 @@ class PixelCanvas(QW.QWidget):
             painter.drawLine(0, center_y, self.width(), center_y)
             painter.drawLine(center_x - 1, 0, center_x - 1, self.height())
             painter.drawLine(0, center_y - 1, self.width(), center_y - 1)
+
 
     def clear_canvas(self):
         """キャンバスをクリア"""
@@ -138,6 +148,7 @@ class PixelCanvas(QW.QWidget):
     def set_color(self, color):
         """スポイトで取得した色を設定"""
         self.current_color = color
+        print(f"現在の色: {color}")  # デバッグ用
 
     def save_state(self):
         """現在のピクセルの状態を履歴に保存"""
@@ -168,6 +179,9 @@ class PixelCanvas(QW.QWidget):
       """新しいレイヤーを追加"""
       if layer_name not in self.layers:
         self.layers[layer_name] = {}
+        print(f"🆕 レイヤー追加後: {self.layers.keys()}")  # デバッグ用
+      # DotEditor に更新を伝える
+      self.parent().update_layer_list()
 
     def delete_layer(self, layer_name):
       """レイヤーを削除"""

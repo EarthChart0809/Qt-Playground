@@ -2,6 +2,7 @@ import PySide6.QtWidgets as QW
 import PySide6.QtGui as QG
 import PySide6.QtCore as QC
 from PixelCanvas import PixelCanvas
+from LayerSetting import LayerListWidget
 
 class DotEditor(QW.QWidget):
     def __init__(self):
@@ -18,6 +19,11 @@ class DotEditor(QW.QWidget):
             QG.QColor(255, 255, 0),  # 黄
             QG.QColor(255, 165, 0)  # オレンジ
         ]
+
+        self.layers = {  # self.layers を先に定義
+            "background": {},
+            "foreground": {}
+        }
 
         # ===== 左側（ツール） =====
         tool_layout = QW.QVBoxLayout()
@@ -140,6 +146,15 @@ class DotEditor(QW.QWidget):
 
         self.setLayout(main_layout)
 
+        # レイヤーリストウィジェット
+        self.layer_list_widget = LayerListWidget(self)
+        self.layer_list_widget.layer_order_changed.connect(self.reorder_layers)  # シグナルを接続
+        layer_layout.addWidget(self.layer_list_widget)
+
+        # 初期レイヤーリストを更新
+        self.layer_list_widget.update_layer_list(self.layers.keys())
+
+
     def load_image(self):
         """ 画像を読み込み、PixelCanvas に渡す """
         file_name, _ = QW.QFileDialog.getOpenFileName(
@@ -166,6 +181,13 @@ class DotEditor(QW.QWidget):
       layer_name, ok = QW.QInputDialog.getText(self, "レイヤー名", "レイヤー名を入力:")
       if ok and layer_name:
         self.canvas.add_layer(layer_name)
+        # ← ここを追加
+        print(
+            f"レイヤー '{layer_name}' 追加後の self.layers: {self.canvas.layers.keys()}")
+        # 仮のデータを入れてみる
+        self.canvas.layers[layer_name] = {
+            (10, 10): QG.QColor(255, 0, 0)}  # 赤い点を(10,10)に描画
+        self.canvas.update()  # 画面を更新
 
     def delete_layer(self):
       """選択したレイヤーを削除"""
@@ -226,3 +248,21 @@ class DotEditor(QW.QWidget):
     def set_brush_mode(self, mode):
       self.brush_mode = mode
       print(f"Brush mode set to: {self.brush_mode}")  # デバッグ用
+
+    def update_layer_order(self, new_order):
+      """ ドラッグ＆ドロップ後にレイヤーの順序を更新 """
+      new_layers = {name: self.layers[name]
+                  for name in new_order if name in self.layers}
+      self.layers = new_layers  # 更新
+      self.update()  # 再描画
+
+    def reorder_layers(self, new_order):
+      """レイヤーの順番を self.layers に反映"""
+      print(f"🔍 new_order: {new_order}")  # デバッグ用
+      print(f"🔍 self.layers.keys(): {list(self.layers.keys())}")  # デバッグ用
+      self.layers = {name: self.layers[name]for name in new_order if name in self.layers}
+      self.update()  # 再描画
+
+    def update_layer_list(self):
+      """レイヤーリストを更新"""
+      self.layer_list_widget.update_layer_list(self.canvas.layers.keys())  
