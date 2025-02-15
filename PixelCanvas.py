@@ -23,9 +23,9 @@ class PixelCanvas(QW.QWidget):
         }
 
         self.current_layer = "foreground"  # 初期レイヤーは前景
-        self.layer_visibility = {"background": True, "foreground": True}
+        self.layer_visibility = {"background": True, "foreground": True}# レイヤーの表示状態
         self.brush_mode = "normal"  # ブラシモード（normal, checker, symmetry）
-
+        self.layer_lock = {"background": False,"foreground": False}  # レイヤーのロック状態
         self.setFixedSize(grid_size * pixel_size, grid_size * pixel_size)
 
     def set_brush_mode(self, mode):
@@ -71,7 +71,7 @@ class PixelCanvas(QW.QWidget):
 
     def paintEvent(self, event):
         painter = QG.QPainter(self)
-        print(f"描画開始: {self.layers.keys()}")  # デバッグ用
+        # print(f"描画開始: {self.layers.keys()}")  # デバッグ用
 
         # ピクセルを描画
         for (x, y), color in self.pixels.items():
@@ -94,7 +94,7 @@ class PixelCanvas(QW.QWidget):
 
         # デバッグ: レイヤーごとにポイント描画
         for layer_name, layer_data in self.layers.items():
-            print(f"描画中のレイヤー: {layer_name}")  # デバッグ用
+            # print(f"描画中のレイヤー: {layer_name}")  # デバッグ用
             for pos, color in layer_data.items():
                 painter.setPen(color)
                 painter.drawPoint(*pos)
@@ -179,9 +179,12 @@ class PixelCanvas(QW.QWidget):
       """新しいレイヤーを追加"""
       if layer_name not in self.layers:
         self.layers[layer_name] = {}
-        print(f"🆕 レイヤー追加後: {self.layers.keys()}")  # デバッグ用
+        self.layer_visibility[layer_name] = True  # デフォルトで表示
+        self.layer_lock[layer_name] = False  # デフォルトで編集可能
+
       # DotEditor に更新を伝える
       self.parent().update_layer_list()
+      self.layer_list_widget.add_layer_item(layer_name)  # リストに追加
 
     def delete_layer(self, layer_name):
       """レイヤーを削除"""

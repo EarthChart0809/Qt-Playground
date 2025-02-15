@@ -25,6 +25,9 @@ class DotEditor(QW.QWidget):
             "foreground": {}
         }
 
+        self.layer_visibility = {name: True for name in self.layers}
+        self.layer_lock = {name: False for name in self.layers}
+
         # ===== 左側（ツール） =====
         tool_layout = QW.QVBoxLayout()
 
@@ -105,35 +108,29 @@ class DotEditor(QW.QWidget):
         # ===== 右側（レイヤー操作） =====
         layer_layout = QW.QVBoxLayout()
 
+        # レイヤーリストウィジェット
+        self.layer_list_widget = LayerListWidget(self)
+        self.layer_list_widget.setFixedWidth(150)  # 横幅を狭める
+        self.layer_list_widget.layer_order_changed.connect(self.reorder_layers)  # シグナルを接続
+        layer_layout.addWidget(self.layer_list_widget)
+
         # 新しいレイヤー
         self.add_layer_button = QW.QPushButton("レイヤー追加")
+        self.add_layer_button.setFixedWidth(100)  # 横幅を狭める
         self.add_layer_button.clicked.connect(self.add_layer)
         layer_layout.addWidget(self.add_layer_button)
 
         # レイヤー削除
         self.delete_layer_button = QW.QPushButton("レイヤー削除")
+        self.delete_layer_button.setFixedWidth(100)  # 横幅を狭める
         self.delete_layer_button.clicked.connect(self.delete_layer)
         layer_layout.addWidget(self.delete_layer_button)
 
-        # レイヤー順序変更（前面・背面）
-        self.move_layer_front_button = QW.QPushButton("前面へ")
-        self.move_layer_front_button.clicked.connect(self.move_layer_to_front)
-        layer_layout.addWidget(self.move_layer_front_button)
-
-        self.move_layer_back_button = QW.QPushButton("背面へ")
-        self.move_layer_back_button.clicked.connect(self.move_layer_to_back)
-        layer_layout.addWidget(self.move_layer_back_button)
-
         # 透明度設定
         self.set_opacity_button = QW.QPushButton("透明度設定")
+        self.set_opacity_button.setFixedWidth(100)  # 横幅を狭める
         self.set_opacity_button.clicked.connect(self.set_opacity)
         layer_layout.addWidget(self.set_opacity_button)
-
-        # 表示/非表示切り替え
-        self.toggle_layer_visibility_button = QW.QPushButton("表示/非表示")
-        self.toggle_layer_visibility_button.clicked.connect(
-            self.toggle_layer_visibility)
-        layer_layout.addWidget(self.toggle_layer_visibility_button)
 
         # レイヤー部分を上部に寄せる
         layer_layout.addStretch()
@@ -145,11 +142,6 @@ class DotEditor(QW.QWidget):
         main_layout.addLayout(layer_layout)  # 右側（レイヤー）
 
         self.setLayout(main_layout)
-
-        # レイヤーリストウィジェット
-        self.layer_list_widget = LayerListWidget(self)
-        self.layer_list_widget.layer_order_changed.connect(self.reorder_layers)  # シグナルを接続
-        layer_layout.addWidget(self.layer_list_widget)
 
         # 初期レイヤーリストを更新
         self.layer_list_widget.update_layer_list(self.layers.keys())
@@ -181,13 +173,7 @@ class DotEditor(QW.QWidget):
       layer_name, ok = QW.QInputDialog.getText(self, "レイヤー名", "レイヤー名を入力:")
       if ok and layer_name:
         self.canvas.add_layer(layer_name)
-        # ← ここを追加
-        print(
-            f"レイヤー '{layer_name}' 追加後の self.layers: {self.canvas.layers.keys()}")
-        # 仮のデータを入れてみる
-        self.canvas.layers[layer_name] = {
-            (10, 10): QG.QColor(255, 0, 0)}  # 赤い点を(10,10)に描画
-        self.canvas.update()  # 画面を更新
+        self.layer_list_widget.add_layer_item(layer_name)  # レイヤーアイテムを追加
 
     def delete_layer(self):
       """選択したレイヤーを削除"""
@@ -233,13 +219,6 @@ class DotEditor(QW.QWidget):
         if ok:
             self.canvas.set_layer_opacity(layer_name, opacity)
 
-    def toggle_layer_visibility(self):
-      """レイヤーの表示/非表示を切り替え"""
-      layer_name, ok = QW.QInputDialog.getText(
-        self, "表示/非表示切替", "表示/非表示を切り替えたいレイヤー名を入力:")
-      if ok and layer_name in self.canvas.layer_visibility:
-        self.canvas.toggle_layer_visibility(layer_name)
-
     def change_canvas_size(self):
         """キャンバスのサイズを変更する"""
         new_size = self.size_input.value()
@@ -258,11 +237,29 @@ class DotEditor(QW.QWidget):
 
     def reorder_layers(self, new_order):
       """レイヤーの順番を self.layers に反映"""
-      print(f"🔍 new_order: {new_order}")  # デバッグ用
-      print(f"🔍 self.layers.keys(): {list(self.layers.keys())}")  # デバッグ用
       self.layers = {name: self.layers[name]for name in new_order if name in self.layers}
       self.update()  # 再描画
 
     def update_layer_list(self):
       """レイヤーリストを更新"""
       self.layer_list_widget.update_layer_list(self.canvas.layers.keys())  
+
+    def toggle_layer_visibility(self, layer_name):
+      """レイヤーの表示/非表示を切り替える"""
+      if layer_name not in self.layer_visibility:
+        self.layer_visibility[layer_name] = True  # デフォルトで表示
+
+      self.layer_visibility[layer_name] = not self.layer_visibility[layer_name]
+      self.update_canvas()
+      return self.layer_visibility[layer_name]
+
+    def toggle_layer_lock(self, layer_name):
+      """レイヤーのロック/解除を切り替え"""
+      if layer_name not in self.layer_lock:
+        self.layer_lock[layer_name] = False  # デフォルトを設定
+
+      self.layer_lock[layer_name] = not self.layer_lock[layer_name]  # ロックをトグル
+      return self.layer_lock[layer_name]  # 現在のロック状態を返す
+
+    def update_canvas(self):
+        self.canvas.update()
