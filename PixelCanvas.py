@@ -140,23 +140,41 @@ class PixelCanvas(QW.QWidget):
         y = (event.pos().y() // self.pixel_size) * self.pixel_size
 
         if event.button() == QC.Qt.LeftButton:
-          self.save_state()  # 変更前の状態を保存
+            self.save_state()  # 変更前の状態を保存
+            self.is_drawing = True  # 描画フラグをON
+            self.paint_at(x, y)  # 最初の座標を描画
 
-          if self.brush_mode == "checker":  # 市松模様モード
+        elif event.button() == QC.Qt.RightButton:
+            if (x, y) in self.layers[self.current_layer]:
+              self.set_color(self.layers[self.current_layer][(x, y)])
+
+        self.update()
+
+    def mouseMoveEvent(self, event):
+        """マウスが動いたときの処理（ドラッグ時）"""
+        if self.is_drawing:  # フラグがONのときのみ描画
+            x = (event.pos().x() // self.pixel_size) * self.pixel_size
+            y = (event.pos().y() // self.pixel_size) * self.pixel_size
+            self.paint_at(x, y)
+
+    def mouseReleaseEvent(self, event):
+        """マウスが離されたときの処理"""
+        if event.button() == QC.Qt.LeftButton:
+            self.is_drawing = False  # 描画フラグをOFF
+
+    def paint_at(self, x,y):
+        """指定座標に色を塗る"""
+        if self.brush_mode == "checker":  # 市松模様モード
             self.draw_checker_pattern(x, y)
-          elif self.brush_mode == "symmetry":  # 左右対称モード
+        elif self.brush_mode == "symmetry":  # 左右対称モード
             self.draw_symmetric(x, y)
-          else:
+        else:
             if self.current_color is not None:
                 self.layers[self.current_layer][(x, y)] = self.current_color
             elif (x, y) in self.layers[self.current_layer]:  # 消しゴム
                 self.erase_pixel(x, y)
 
-        elif event.button() == QC.Qt.RightButton:
-            if (x, y) in self.layers[self.current_layer]:
-                self.set_color(self.layers[self.current_layer][(x, y)])
-
-        self.update()
+        self.update()  # 再描画
 
     def set_color(self, color):
         """スポイトで取得した色を設定"""
