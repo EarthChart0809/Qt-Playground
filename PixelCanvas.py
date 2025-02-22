@@ -71,44 +71,58 @@ class PixelCanvas(QW.QWidget):
 
     def paintEvent(self, event):
         painter = QG.QPainter(self)
-        # print(f"描画開始: {self.layers.keys()}")  # デバッグ用
 
         # ピクセルを描画
         for (x, y), color in self.pixels.items():
-            rect = (x, y, self.pixel_size, self.pixel_size)
-            painter.fillRect(*rect, color)
+          rect = (x, y, self.pixel_size, self.pixel_size)
+
+          if color is None:
+            painter.setPen(QC.Qt.NoPen)  # ペンなし
+            color = QC.Qt.white  # デフォルト色を白にする
+          else:
+            painter.setPen(QG.QPen(color))  # 適切なペンを設定
+
+          painter.fillRect(*rect, color)  # 塗りつぶし
 
         # すべてのレイヤーを描画
         for layer_name, layer_data in self.layers.items():
-            if self.layer_visibility.get(layer_name, True):  # 表示されているレイヤーのみ描画
-                for (x, y), color in layer_data.items():
-                    painter.fillRect(x, y, self.pixel_size, self.pixel_size, color)
+          if self.layer_visibility.get(layer_name, True):  # 表示されているレイヤーのみ描画
+            for (x, y), color in layer_data.items():
+                if color is None:
+                    painter.setPen(QC.Qt.NoPen)
+                    color = QC.Qt.white
+                else:
+                    painter.setPen(QG.QPen(color))
+
+                painter.fillRect(x, y, self.pixel_size, self.pixel_size, color)
 
         # グリッド描画（ON の場合のみ）
         if self.show_grid:
-            painter.setPen(QC.Qt.gray)
-            for x in range(0, self.width(), self.pixel_size):
-                for y in range(0, self.height(), self.pixel_size):
-                    rect = (x, y, self.pixel_size, self.pixel_size)
-                    painter.drawRect(*rect)
+          painter.setPen(QC.Qt.gray)
+          for x in range(0, self.width(), self.pixel_size):
+            for y in range(0, self.height(), self.pixel_size):
+                rect = (x, y, self.pixel_size, self.pixel_size)
+                painter.drawRect(*rect)
 
         # デバッグ: レイヤーごとにポイント描画
         for layer_name, layer_data in self.layers.items():
-            # print(f"描画中のレイヤー: {layer_name}")  # デバッグ用
-            for pos, color in layer_data.items():
-                painter.setPen(color)
-                painter.drawPoint(*pos)
+          for pos, color in layer_data.items():
+            if color is None:
+                color = QC.Qt.black  # `None` の場合、デフォルトで黒を設定
+            painter.setPen(QG.QPen(color))
+            painter.drawPoint(*pos)
 
-        # 中心線
+        # 中心線（show_grid とは別フラグにした方が柔軟かも）
         if self.show_grid:
-            painter.setPen(QG.QColor(255, 127, 127, 255))
-            center_x = self.width() // 2
-            center_y = self.height() // 2
-            painter.drawLine(center_x, 0, center_x, self.height())
-            painter.drawLine(0, center_y, self.width(), center_y)
-            painter.drawLine(center_x - 1, 0, center_x - 1, self.height())
-            painter.drawLine(0, center_y - 1, self.width(), center_y - 1)
+          painter.setPen(QG.QColor(255, 127, 127, 255))
+          center_x = self.width() // 2
+          center_y = self.height() // 2
+          painter.drawLine(center_x, 0, center_x, self.height())
+          painter.drawLine(0, center_y, self.width(), center_y)
+          painter.drawLine(center_x - 1, 0, center_x - 1, self.height())
+          painter.drawLine(0, center_y - 1, self.width(), center_y - 1)
 
+        painter.end()  # QPainter を明示的に終了
 
     def clear_canvas(self):
         """キャンバスをクリア"""
@@ -135,9 +149,8 @@ class PixelCanvas(QW.QWidget):
           else:
             if self.current_color is not None:
                 self.layers[self.current_layer][(x, y)] = self.current_color
-            else:
-                if (x, y) in self.layers[self.current_layer]:
-                    del self.layers[self.current_layer][(x, y)]  # 消しゴム機能
+            elif (x, y) in self.layers[self.current_layer]:  # 消しゴム
+                self.erase_pixel(x, y)
 
         elif event.button() == QC.Qt.RightButton:
             if (x, y) in self.layers[self.current_layer]:
@@ -223,27 +236,40 @@ class PixelCanvas(QW.QWidget):
 
     def draw_checker_pattern(self, x, y):
         """市松模様を描画"""
+        base_x = (x // self.pixel_size) * self.pixel_size
+        base_y = (y // self.pixel_size) * self.pixel_size
+
         for i in range(2):
-            for j in range(2):
-                grid_x = x + i * self.pixel_size
-                grid_y = y + j * self.pixel_size
-                if (i + j) % 2 == 0:  # 市松模様の条件
-                    self.layers[self.current_layer][(
-                        grid_x, grid_y)] = self.current_color
+          for j in range(2):
+            grid_x = base_x + i * self.pixel_size
+            grid_y = base_y + j * self.pixel_size
+            if ((grid_x // self.pixel_size) + (grid_y // self.pixel_size)) % 2 == 0:
+                self.layers[self.current_layer][(
+                    grid_x, grid_y)] = self.current_color
+
         self.update()
 
     def draw_symmetric(self, x, y):
-        """左右対称にドットを描画"""
-        width = self.width()
-        height = self.height()
-        mirrored_x = width - x - self.pixel_size  # 左右反転
-        mirrored_y = height - y - self.pixel_size  # 上下反転
+        """左右対称にドットを描画（補正版）"""
+        canvas_width = self.width() // self.pixel_size  # ピクセル単位でキャンバスの幅を取得
+        canvas_height = self.height() // self.pixel_size  # ピクセル単位でキャンバスの高さを取得
+
+        mirrored_x = (canvas_width - 1 - (x // self.pixel_size)) * self.pixel_size
+        mirrored_y = (canvas_height - 1 - (y // self.pixel_size)) * self.pixel_size
+
+        print(f"クリック座標: {x}, {y}")
+        print(f"左右対称の座標: {mirrored_x}, {y} と {x}, {mirrored_y}")
+        print(f"対角対称の座標: {mirrored_x}, {mirrored_y}")
+        print(
+            f"描画対象座標: ({x}, {y}), ミラー座標: ({mirrored_x}, {y}), ({x}, {mirrored_y}), ({mirrored_x}, {mirrored_y})")
         self.layers[self.current_layer][(x, y)] = self.current_color
         self.layers[self.current_layer][(mirrored_x, y)] = self.current_color
         self.layers[self.current_layer][(x, mirrored_y)] = self.current_color
-        self.layers[self.current_layer][(
-            mirrored_x, mirrored_y)] = self.current_color
+        self.layers[self.current_layer][(mirrored_x, mirrored_y)] = self.current_color
+        
+        print("Calling self.update()")  # 確認用
         self.update()
+        
 
     def get_crop_rect(self, pixmap):
       dialog = QW.QDialog(self)
@@ -341,3 +367,32 @@ class PixelCanvas(QW.QWidget):
                 grid_x, grid_y)] = qcolor  # ピクセル情報を適用
 
       self.update()  # キャンバスを更新
+
+    def erase_pixel(self, x, y):
+      """消しゴムで消す処理（シンメトリー・市松模様対応）"""
+      to_erase = [(x, y)]  # 通常の座標を追加
+
+      if self.brush_mode == "checker":
+        # 市松模様で生成された座標を削除
+        for i in range(2):
+            for j in range(2):
+                grid_x = x + i * self.pixel_size
+                grid_y = y + j * self.pixel_size
+                if (i + j) % 2 == 0:
+                    to_erase.append((grid_x, grid_y))
+
+      elif self.brush_mode == "symmetry":
+        # 左右対称で生成された座標を削除
+        width = self.width()
+        height = self.height()
+        mirrored_x = width - x - self.pixel_size
+        mirrored_y = height - y - self.pixel_size
+
+        to_erase.extend([(mirrored_x, y), (x, mirrored_y), (mirrored_x, mirrored_y)])
+
+      # 削除処理
+      for pos in to_erase:
+        if pos in self.layers[self.current_layer]:
+          self.layers[self.current_layer][pos] = QC.Qt.white  # 背景色にする
+
+      self.update()

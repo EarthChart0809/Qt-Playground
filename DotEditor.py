@@ -96,6 +96,9 @@ class DotEditor(QW.QWidget):
         self.symmetry_brush_button = QW.QPushButton("シンメトリー")
         self.symmetry_brush_button.clicked.connect(lambda: self.set_brush_mode("symmetry"))
 
+        self.normal_brush_button = QW.QPushButton("ブラシモード")  # 追加
+        self.normal_brush_button.clicked.connect(lambda: self.set_brush_mode("normal"))
+
         # ツールのレイアウトに追加
         tool_layout.addWidget(QW.QLabel("キャンバスサイズ:"))
         tool_layout.addWidget(self.size_input)
@@ -103,6 +106,7 @@ class DotEditor(QW.QWidget):
         tool_layout.addWidget(self.grid_button)
         tool_layout.addWidget(self.checker_brush_button)
         tool_layout.addWidget(self.symmetry_brush_button)
+        tool_layout.addWidget(self.normal_brush_button)
 
 
         # ===== 右側（レイヤー操作） =====
@@ -243,6 +247,11 @@ class DotEditor(QW.QWidget):
     def set_brush_mode(self, mode):
       self.brush_mode = mode
       print(f"Brush mode set to: {self.brush_mode}")  # デバッグ用
+      # PixelCanvas 側にも反映させる
+      if hasattr(self, "canvas"):
+        self.canvas.brush_mode = mode  # これを追加
+
+      print(f"Brush mode after setting: {self.brush_mode}")
 
     def update_layer_order(self, new_order):
       """ ドラッグ＆ドロップ後にレイヤーの順序を更新 """
